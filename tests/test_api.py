@@ -26,4 +26,4 @@ def test_invalid_transition_returns_validation_error():
         "/workflows/transition",
         json={"status": "completed", "action": "start"},
     )
-    assert response.status_code == 500
+    assert response.status_code == 409
