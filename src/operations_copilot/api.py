@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -51,7 +51,10 @@ def capabilities() -> dict[str, list[str]]:
 
 @app.post("/workflows/transition", response_model=TransitionResult)
 def preview_transition(request: TransitionRequest) -> TransitionResult:
-    next_status = transition(request.status, request.action)
+    try:
+        next_status = transition(request.status, request.action)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return TransitionResult(
         previous_status=request.status,
         action=request.action,
