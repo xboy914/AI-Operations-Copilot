@@ -1,0 +1,23 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: copilot
+      POSTGRES_USER: copilot
+      POSTGRES_PASSWORD: copilot
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+  redis:
+    image: redis:8-alpine
+  api:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+psycopg://copilot:copilot@postgres:5432/copilot
+    ports: ["8000:8000"]
+    depends_on: [postgres, redis]
+  web:
+    build: ./web
+    ports: ["3000:3000"]
+    depends_on: [api]
+volumes:
+  postgres-data:
