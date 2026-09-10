@@ -9,6 +9,9 @@ A production-oriented control plane for agentic business workflows with human ap
 - FastAPI contracts and interactive documentation
 - Black-and-gold responsive Next.js operations workspace
 - PostgreSQL, Redis, API, and web Docker Compose stack
+- Persistent PostgreSQL workflow commands and audit events
+- JWT authentication with operator, approver, and admin RBAC
+- Alembic database migrations
 - Backend and frontend CI quality gates
 
 ## Run
@@ -23,8 +26,6 @@ docker compose up --build
 
 ## Roadmap
 
-- JWT authentication and RBAC enforcement
-- Persistent workflow commands and audit service
 - LangGraph orchestration
 - MCP tool registry
 - Human approval inbox
