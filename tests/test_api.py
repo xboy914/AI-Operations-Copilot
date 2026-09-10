@@ -6,7 +6,7 @@ client = TestClient(app)
 
 
 def test_health_and_capabilities():
-    assert client.get("/health").json() == {"status": "ok", "version": "0.2.0"}
+    assert client.get("/health").json() == {"status": "ok", "version": "0.5.0"}
     response = client.get("/capabilities")
     assert response.status_code == 200
     assert "waiting_approval" in response.json()["workflow_statuses"]
@@ -27,3 +27,9 @@ def test_invalid_transition_returns_validation_error():
         json={"status": "completed", "action": "start"},
     )
     assert response.status_code == 409
+
+
+def test_live_control_routes_require_authentication():
+    assert client.get("/agent/runs").status_code == 401
+    assert client.get("/approvals").status_code == 401
+    assert client.get("/agent/runs/missing/events").status_code == 401
