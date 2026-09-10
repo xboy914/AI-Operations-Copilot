@@ -1,23 +1,62 @@
 services:
   postgres:
     image: postgres:17-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: copilot
       POSTGRES_USER: copilot
-      POSTGRES_PASSWORD: copilot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U copilot -d copilot"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    security_opt: ["no-new-privileges:true"]
+
   redis:
     image: redis:8-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    security_opt: ["no-new-privileges:true"]
+
   api:
     build: .
+    restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql+psycopg://copilot:copilot@postgres:5432/copilot
+      DATABASE_URL: postgresql+psycopg://copilot:${POSTGRES_PASSWORD}@postgres:5432/copilot
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+      BOOTSTRAP_SECRET: ${BOOTSTRAP_SECRET:?set BOOTSTRAP_SECRET}
+      CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:3000"]}
+      AI_PROVIDER: ${AI_PROVIDER:-heuristic}
+      PROVIDER_API_KEY: ${PROVIDER_API_KEY:-}
+      PROVIDER_BASE_URL: ${PROVIDER_BASE_URL:-}
+      CHAT_MODEL: ${CHAT_MODEL:-gpt-4.1-mini}
     ports: ["8000:8000"]
-    depends_on: [postgres, redis]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    security_opt: ["no-new-privileges:true"]
+
   web:
-    build: ./web
+    build:
+      context: ./web
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    restart: unless-stopped
     ports: ["3000:3000"]
-    depends_on: [api]
+    depends_on:
+      api: {condition: service_healthy}
+    security_opt: ["no-new-privileges:true"]
+
 volumes:
   postgres-data:
+  redis-data:

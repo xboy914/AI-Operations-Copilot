@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ai-operations-copilot"
-version = "0.6.0"
+version = "1.0.0"
 description = "Agentic operations workflows with human approval and audit trails"
 readme = "README.md"
 requires-python = ">=3.11"
