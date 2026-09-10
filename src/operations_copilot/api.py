@@ -1,38 +1,41 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from typing import Annotated
+from uuid import UUID
 
-from .config import get_settings
+from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from .config import Settings, get_settings
+from .database import AuditEvent, User, WorkflowRun, get_db
 from .domain import WorkflowAction, WorkflowStatus, transition
+from .schemas import (
+    BootstrapRequest,
+    LoginRequest,
+    TokenResult,
+    WorkflowCreate,
+    WorkflowTransition,
+    WorkflowView,
+)
+from .security import (
+    Permission,
+    Principal,
+    Role,
+    create_access_token,
+    password_hash,
+    require,
+)
 
 settings = get_settings()
-app = FastAPI(
-    title="AI Operations Copilot",
-    version="0.1.0",
-    description="Auditable agentic workflows with human approval.",
-)
+app = FastAPI(title="AI Operations Copilot", version="0.2.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
     allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_headers=["Content-Type", "Authorization", "X-Bootstrap-Secret"],
 )
 
-
-class TransitionRequest(BaseModel):
-    status: WorkflowStatus
-    action: WorkflowAction
-
-
-class TransitionResult(BaseModel):
-    previous_status: WorkflowStatus
-    action: WorkflowAction
-    status: WorkflowStatus
-
-
-class WorkflowDraft(BaseModel):
-    title: str = Field(min_length=3, max_length=200)
-    request: str = Field(min_length=10, max_length=5000)
+Db = Annotated[Session, Depends(get_db)]
 
 
 @app.get("/health")
@@ -40,23 +43,101 @@ def health() -> dict[str, str]:
     return {"status": "ok", "version": app.version}
 
 
-@app.get("/capabilities")
-def capabilities() -> dict[str, list[str]]:
-    return {
-        "workflow_statuses": [item.value for item in WorkflowStatus],
-        "human_actions": ["approve", "reject"],
-        "planned_tools": ["database_query", "report_builder", "task_creator"],
-    }
+@app.post("/auth/bootstrap", response_model=TokenResult, status_code=201)
+def bootstrap_admin(
+    request: BootstrapRequest,
+    db: Db,
+    x_bootstrap_secret: Annotated[str | None, Header()] = None,
+) -> TokenResult:
+    if x_bootstrap_secret != settings.bootstrap_secret:
+        raise HTTPException(status_code=403, detail="Invalid bootstrap secret")
+    if db.scalar(select(User.id).limit(1)) is not None:
+        raise HTTPException(status_code=409, detail="Bootstrap already completed")
+    user = User(
+        email=request.email.lower(),
+        password_hash=password_hash.hash(request.password),
+        role=Role.ADMIN.value,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return TokenResult(
+        access_token=create_access_token(str(user.id), user.email, Role.ADMIN, settings)
+    )
 
 
-@app.post("/workflows/transition", response_model=TransitionResult)
-def preview_transition(request: TransitionRequest) -> TransitionResult:
+@app.post("/auth/token", response_model=TokenResult)
+def login(request: LoginRequest, db: Db) -> TokenResult:
+    user = db.scalar(select(User).where(User.email == request.email.lower()))
+    if user is None or not password_hash.verify(request.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    return TokenResult(
+        access_token=create_access_token(str(user.id), user.email, Role(user.role), settings)
+    )
+
+
+@app.post("/workflows", response_model=WorkflowView, status_code=201)
+def create_workflow(
+    request: WorkflowCreate,
+    db: Db,
+    principal: Annotated[Principal, Depends(require(Permission.CREATE_WORKFLOW))],
+) -> WorkflowRun:
+    workflow = WorkflowRun(
+        owner_id=UUID(principal.user_id),
+        title=request.title,
+        request=request.request,
+    )
+    db.add(workflow)
+    db.flush()
+    db.add(
+        AuditEvent(
+            workflow_id=workflow.id,
+            event_type="workflow.created",
+            actor=principal.email,
+            payload={"title": workflow.title},
+        )
+    )
+    db.commit()
+    db.refresh(workflow)
+    return workflow
+
+
+@app.get("/workflows", response_model=list[WorkflowView])
+def list_workflows(
+    db: Db,
+    principal: Annotated[Principal, Depends(require(Permission.CREATE_WORKFLOW))],
+) -> list[WorkflowRun]:
+    query = select(WorkflowRun).order_by(WorkflowRun.created_at.desc())
+    if principal.role is not Role.ADMIN:
+        query = query.where(WorkflowRun.owner_id == UUID(principal.user_id))
+    return list(db.scalars(query))
+
+
+@app.post("/workflows/{workflow_id}/transition", response_model=WorkflowView)
+def transition_workflow(
+    workflow_id: UUID,
+    request: WorkflowTransition,
+    db: Db,
+    principal: Annotated[Principal, Depends(require(Permission.RUN_WORKFLOW))],
+) -> WorkflowRun:
+    workflow = db.get(WorkflowRun, workflow_id)
+    if workflow is None:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    if request.action in {WorkflowAction.APPROVE, WorkflowAction.REJECT}:
+        if principal.role not in {Role.APPROVER, Role.ADMIN}:
+            raise HTTPException(status_code=403, detail="Approver role required")
     try:
-        next_status = transition(request.status, request.action)
+        workflow.status = transition(WorkflowStatus(workflow.status), request.action).value
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return TransitionResult(
-        previous_status=request.status,
-        action=request.action,
-        status=next_status,
+    db.add(
+        AuditEvent(
+            workflow_id=workflow.id,
+            event_type=f"workflow.{request.action.value}",
+            actor=principal.email,
+            payload={"status": workflow.status},
+        )
     )
+    db.commit()
+    db.refresh(workflow)
+    return workflow
