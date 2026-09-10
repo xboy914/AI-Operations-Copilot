@@ -61,8 +61,6 @@ class AuditEvent(Base):
 
 
 engine = create_engine(get_settings().database_url, pool_pre_ping=True)
-SessionLocal = Session.bind_create(engine) if False else None
-
 
 def get_db() -> Generator[Session, None, None]:
     with Session(engine) as session:
