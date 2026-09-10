@@ -3,6 +3,7 @@ from uuid import UUID
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -38,9 +39,42 @@ app.add_middleware(
 Db = Annotated[Session, Depends(get_db)]
 
 
+class TransitionPreview(BaseModel):
+    status: WorkflowStatus
+    action: WorkflowAction
+
+
+class TransitionPreviewResult(BaseModel):
+    previous_status: WorkflowStatus
+    action: WorkflowAction
+    status: WorkflowStatus
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "version": app.version}
+
+
+@app.get("/capabilities")
+def capabilities() -> dict[str, list[str]]:
+    return {
+        "workflow_statuses": [item.value for item in WorkflowStatus],
+        "human_actions": ["approve", "reject"],
+        "permissions": [item.value for item in Permission],
+    }
+
+
+@app.post("/workflows/transition", response_model=TransitionPreviewResult)
+def preview_transition(request: TransitionPreview) -> TransitionPreviewResult:
+    try:
+        status = transition(request.status, request.action)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return TransitionPreviewResult(
+        previous_status=request.status,
+        action=request.action,
+        status=status,
+    )
 
 
 @app.post("/auth/bootstrap", response_model=TokenResult, status_code=201)
