@@ -63,9 +63,9 @@ class AgentRuntime:
         config = {"configurable": {"thread_id": run_id}}
         try:
             result = self._result(run_id, self.graph.invoke({"request": request}, config=config))
-            result |= {"request": request, "actor": actor}
+            snapshot = result | {"request": request, "actor": actor}
             event_type = "approval.requested" if result["approval"] else "run.completed"
-            self.events.publish(run_id, event_type, result)
+            self.events.publish(run_id, event_type, snapshot)
             return result
         except Exception:
             self.events.publish(run_id, "run.failed",
@@ -83,9 +83,10 @@ class AgentRuntime:
         })
         config = {"configurable": {"thread_id": thread_id}}
         output = self.graph.invoke(Command(resume={"approved": approved}), config=config)
-        result = self._result(thread_id, output) | {
+        result = self._result(thread_id, output)
+        snapshot = result | {
             "request": previous["request"], "actor": previous["actor"], "decided_by": actor}
-        self.events.publish(thread_id, "run.completed" if approved else "run.rejected", result)
+        self.events.publish(thread_id, "run.completed" if approved else "run.rejected", snapshot)
         return result
 
     @staticmethod
