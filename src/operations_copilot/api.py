@@ -6,7 +6,8 @@ from uuid import UUID
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -33,7 +34,7 @@ from .security import (
 )
 
 settings = get_settings()
-app = FastAPI(title="AI Operations Copilot", version="0.5.0")
+app = FastAPI(title="AI Operations Copilot", version="0.6.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -67,6 +68,11 @@ class TransitionPreviewResult(BaseModel):
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "version": app.version}
+
+
+@app.get("/metrics", response_class=PlainTextResponse)
+def metrics() -> PlainTextResponse:
+    return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/capabilities")
