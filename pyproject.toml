@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ai-operations-copilot"
-version = "0.3.0"
+version = "0.4.0"
 description = "Agentic operations workflows with human approval and audit trails"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -12,6 +12,7 @@ dependencies = [
   "alembic>=1.14",
   "fastapi>=0.115",
   "langgraph>=1.0,<2",
+  "openai>=1.50",
   "pwdlib[argon2]>=0.2",
   "pyjwt>=2.9",
   "pydantic[email]>=2.9",

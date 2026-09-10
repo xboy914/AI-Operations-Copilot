@@ -5,6 +5,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 
+from .planner import HeuristicPlanner, Planner
 from .tools import ToolRegistry, default_registry
 
 
@@ -17,7 +18,7 @@ class AgentState(TypedDict, total=False):
     result: dict[str, Any]
 
 
-def plan(state: AgentState) -> AgentState:
+def legacy_plan(state: AgentState) -> AgentState:
     request = state["request"]
     lowered = request.lower()
     if "report" in lowered or "گزارش" in request:
@@ -34,10 +35,15 @@ def plan(state: AgentState) -> AgentState:
 
 
 class AgentRuntime:
-    def __init__(self, registry: ToolRegistry | None = None) -> None:
+    def __init__(
+        self,
+        registry: ToolRegistry | None = None,
+        planner: Planner | None = None,
+    ) -> None:
         self.registry = registry or default_registry()
+        self.planner = planner or HeuristicPlanner()
         builder = StateGraph(AgentState)
-        builder.add_node("plan", plan)
+        builder.add_node("plan", self._plan)
         builder.add_node("approval", self._approval)
         builder.add_node("execute", self._execute)
         builder.add_edge(START, "plan")
@@ -45,6 +51,14 @@ class AgentRuntime:
         builder.add_edge("approval", "execute")
         builder.add_edge("execute", END)
         self.graph = builder.compile(checkpointer=InMemorySaver())
+
+    def _plan(self, state: AgentState) -> AgentState:
+        plan = self.planner.plan(state["request"], self.registry)
+        return {
+            "tool_name": plan.tool_name,
+            "arguments": plan.arguments,
+            "status": "planned",
+        }
 
     def _approval(self, state: AgentState) -> AgentState:
         tool = self.registry.get(state["tool_name"])

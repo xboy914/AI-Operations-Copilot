@@ -14,6 +14,8 @@ A production-oriented control plane for agentic business workflows with human ap
 - Alembic database migrations
 - LangGraph execution with checkpointed human approval interrupts
 - Risk-aware tool registry that auto-runs read-only tools and gates side effects
+- OpenAI/Ollama-compatible intelligent tool planning
+- MCP transport adapters with explicit approval policy metadata
 - Backend and frontend CI quality gates
 
 ## Run
@@ -28,7 +30,6 @@ docker compose up --build
 
 ## Roadmap
 
-- MCP tool adapters and dynamic tool discovery
 - Human approval inbox UI
 - Live execution events
 - Observability, E2E tests, and v1.0 release

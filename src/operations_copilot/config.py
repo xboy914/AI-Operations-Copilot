@@ -4,6 +4,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    ai_provider: str = "heuristic"
+    openai_api_key: str | None = None
+    provider_api_key: str | None = None
+    provider_base_url: str | None = None
+    chat_model: str = "gpt-4.1-mini"
     database_url: str = "postgresql+psycopg://copilot:copilot@localhost:5432/copilot"
     cors_origins: list[str] = ["http://localhost:3000"]
     jwt_secret: str = "change-me-before-production"
