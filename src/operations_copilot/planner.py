@@ -62,7 +62,7 @@ class OpenAICompatiblePlanner:
         registry.get(tool_name)
         arguments = payload.get("arguments", {})
         if not isinstance(arguments, dict):
-            raise ValueError("Planner arguments must be an object")
+            raise TypeError("Planner arguments must be an object")
         return ToolPlan(tool_name, arguments)
 
 
