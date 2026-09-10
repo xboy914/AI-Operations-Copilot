@@ -6,7 +6,9 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 
 from .config import get_settings
+from .observability import RunTimer
 from .planner import Planner, build_planner
+from .resilience import RetryPolicy, execute_with_retry
 from .run_events import RunEventStore
 from .tools import ToolRegistry, default_registry
 
@@ -22,10 +24,12 @@ class AgentState(TypedDict, total=False):
 
 class AgentRuntime:
     def __init__(self, registry: ToolRegistry | None = None,
-                 planner: Planner | None = None, events: RunEventStore | None = None) -> None:
+                 planner: Planner | None = None, events: RunEventStore | None = None,
+                 retry_policy: RetryPolicy | None = None) -> None:
         self.registry = registry or default_registry()
         self.planner = planner or build_planner(get_settings())
         self.events = events or RunEventStore()
+        self.retry_policy = retry_policy or RetryPolicy()
         builder = StateGraph(AgentState)
         builder.add_node("plan", self._plan)
         builder.add_node("approval", self._approval)
@@ -53,10 +57,16 @@ class AgentRuntime:
         if not state.get("approved"):
             return {"status": "rejected", "result": {"executed": False}}
         tool = self.registry.get(state["tool_name"])
-        return {"status": "completed", "result": tool.handler(state["arguments"])}
+        result = execute_with_retry(
+            tool.name,
+            lambda: tool.handler(state["arguments"]),
+            self.retry_policy,
+        )
+        return {"status": "completed", "result": result}
 
     def start(self, request: str, thread_id: str | None = None,
               actor: str = "system") -> dict[str, Any]:
+        timer = RunTimer()
         run_id = thread_id or str(uuid4())
         self.events.publish(run_id, "run.started",
                             {"status": "running", "request": request, "actor": actor})
@@ -66,10 +76,12 @@ class AgentRuntime:
             snapshot = result | {"request": request, "actor": actor}
             event_type = "approval.requested" if result["approval"] else "run.completed"
             self.events.publish(run_id, event_type, snapshot)
+            timer.observe(result["status"])
             return result
         except Exception:
             self.events.publish(run_id, "run.failed",
                                 {"status": "failed", "request": request, "actor": actor})
+            timer.observe("failed")
             raise
 
     def resume(self, thread_id: str, approved: bool,

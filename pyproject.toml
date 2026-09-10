@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ai-operations-copilot"
-version = "0.5.0"
+version = "0.6.0"
 description = "Agentic operations workflows with human approval and audit trails"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -17,6 +17,7 @@ dependencies = [
   "pyjwt>=2.9",
   "pydantic[email]>=2.9",
   "pydantic-settings>=2.5",
+  "prometheus-client>=0.21",
   "psycopg[binary]>=3.2",
   "sqlalchemy>=2.0",
   "uvicorn[standard]>=0.30",

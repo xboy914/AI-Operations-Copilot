@@ -18,6 +18,9 @@ A production-oriented control plane for agentic business workflows with human ap
 - MCP transport adapters with explicit approval policy metadata
 - Approval inbox with protected approve/reject actions
 - Live authenticated agent-run event stream
+- Prometheus metrics for runs, latency, tool outcomes, and retries
+- Exponential retry policy restricted to explicit transient failures
+- Deterministic planner and approval-policy evaluation suite
 - Backend and frontend CI quality gates
 
 ## Run
@@ -32,7 +35,7 @@ docker compose up --build
 
 ## Roadmap
 
-- Observability, E2E tests, and v1.0 release
+- E2E tests, deployment hardening, and v1.0 release
 
 ## License
 
