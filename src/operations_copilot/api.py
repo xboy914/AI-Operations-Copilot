@@ -49,7 +49,7 @@ class AgentDecision(BaseModel):
     approved: bool
 
 
-class TransitionPreview(BaseModel:
+class TransitionPreview(BaseModel):
     status: WorkflowStatus
     action: WorkflowAction
 
