@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .config import Settings, get_settings
+from .config import get_settings
 from .database import AuditEvent, User, WorkflowRun, get_db
 from .domain import WorkflowAction, WorkflowStatus, transition
 from .schemas import (
@@ -123,9 +123,11 @@ def transition_workflow(
     workflow = db.get(WorkflowRun, workflow_id)
     if workflow is None:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    if request.action in {WorkflowAction.APPROVE, WorkflowAction.REJECT}:
-        if principal.role not in {Role.APPROVER, Role.ADMIN}:
-            raise HTTPException(status_code=403, detail="Approver role required")
+    if (
+        request.action in {WorkflowAction.APPROVE, WorkflowAction.REJECT}
+        and principal.role not in {Role.APPROVER, Role.ADMIN}
+    ):
+        raise HTTPException(status_code=403, detail="Approver role required")
     try:
         workflow.status = transition(WorkflowStatus(workflow.status), request.action).value
     except ValueError as exc:
