@@ -16,6 +16,8 @@ A production-oriented control plane for agentic business workflows with human ap
 - Risk-aware tool registry that auto-runs read-only tools and gates side effects
 - OpenAI/Ollama-compatible intelligent tool planning
 - MCP transport adapters with explicit approval policy metadata
+- Approval inbox with protected approve/reject actions
+- Live authenticated agent-run event stream
 - Backend and frontend CI quality gates
 
 ## Run
@@ -30,8 +32,6 @@ docker compose up --build
 
 ## Roadmap
 
-- Human approval inbox UI
-- Live execution events
 - Observability, E2E tests, and v1.0 release
 
 ## License
