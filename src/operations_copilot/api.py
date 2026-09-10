@@ -34,7 +34,7 @@ from .security import (
 )
 
 settings = get_settings()
-app = FastAPI(title="AI Operations Copilot", version="0.6.0")
+app = FastAPI(title="AI Operations Copilot", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
