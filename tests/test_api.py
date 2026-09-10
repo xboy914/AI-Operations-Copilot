@@ -6,7 +6,7 @@ client = TestClient(app)
 
 
 def test_health_and_capabilities():
-    assert client.get("/health").json() == {"status": "ok", "version": "0.5.0"}
+    assert client.get("/health").json() == {"status": "ok", "version": "0.6.0"}
     response = client.get("/capabilities")
     assert response.status_code == 200
     assert "waiting_approval" in response.json()["workflow_statuses"]
@@ -33,3 +33,9 @@ def test_live_control_routes_require_authentication():
     assert client.get("/agent/runs").status_code == 401
     assert client.get("/approvals").status_code == 401
     assert client.get("/agent/runs/missing/events").status_code == 401
+
+
+def test_metrics_endpoint_is_prometheus_compatible():
+    response = client.get("/metrics")
+    assert response.status_code == 200
+    assert "copilot_agent_runs_total" in response.text
