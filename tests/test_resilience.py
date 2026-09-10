@@ -1,6 +1,10 @@
 import pytest
 
-from operations_copilot.resilience import RetryPolicy, RetryableToolError, execute_with_retry
+from operations_copilot.resilience import (
+    RetryableToolError,
+    RetryPolicy,
+    execute_with_retry,
+)
 
 
 def test_transient_failure_is_retried_with_backoff():
