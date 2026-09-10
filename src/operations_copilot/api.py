@@ -1,8 +1,12 @@
+import asyncio
+import json
+from collections.abc import AsyncIterator
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -29,7 +33,7 @@ from .security import (
 )
 
 settings = get_settings()
-app = FastAPI(title="AI Operations Copilot", version="0.2.0")
+app = FastAPI(title="AI Operations Copilot", version="0.5.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -201,7 +205,7 @@ def start_agent_run(
     request: AgentRunRequest,
     principal: Annotated[Principal, Depends(require(Permission.RUN_WORKFLOW))],
 ) -> dict:
-    return runtime.start(request.request, request.thread_id)
+    return runtime.start(request.request, request.thread_id, actor=principal.email)
 
 
 @app.post("/agent/runs/{thread_id}/decision")
@@ -210,4 +214,57 @@ def decide_agent_run(
     request: AgentDecision,
     principal: Annotated[Principal, Depends(require(Permission.APPROVE_WORKFLOW))],
 ) -> dict:
-    return runtime.resume(thread_id, request.approved)
+    try:
+        return runtime.resume(thread_id, request.approved, actor=principal.email)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Agent run not found") from exc
+
+
+@app.get("/agent/runs")
+def list_agent_runs(
+    principal: Annotated[Principal, Depends(require(Permission.RUN_WORKFLOW))],
+    status: str | None = None,
+) -> list[dict]:
+    return runtime.events.list_runs(status=status)
+
+
+@app.get("/approvals")
+def approval_inbox(
+    principal: Annotated[Principal, Depends(require(Permission.APPROVE_WORKFLOW))],
+) -> list[dict]:
+    return runtime.events.list_runs(status="waiting_approval")
+
+
+@app.get("/agent/runs/{thread_id}")
+def get_agent_run(
+    thread_id: str,
+    principal: Annotated[Principal, Depends(require(Permission.RUN_WORKFLOW))],
+) -> dict:
+    try:
+        return runtime.events.get_run(thread_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Agent run not found") from exc
+
+
+@app.get("/agent/runs/{thread_id}/events")
+async def stream_agent_run(
+    thread_id: str,
+    principal: Annotated[Principal, Depends(require(Permission.RUN_WORKFLOW))],
+) -> StreamingResponse:
+    async def event_stream() -> AsyncIterator[str]:
+        sequence = 0
+        while True:
+            try:
+                events = runtime.events.events_after(thread_id, sequence)
+            except KeyError:
+                yield 'event: error\ndata: {"detail":"Agent run not found"}\n\n'
+                return
+            for event in events:
+                sequence = event["sequence"]
+                yield f"event: run\ndata: {json.dumps(event)}\n\n"
+                if event["status"] in {"completed", "rejected", "failed"}:
+                    return
+            await asyncio.sleep(0.25)
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
