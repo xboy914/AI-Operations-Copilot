@@ -6,7 +6,7 @@ client = TestClient(app)
 
 
 def test_health_and_capabilities():
-    assert client.get("/health").json() == {"status": "ok", "version": "0.1.0"}
+    assert client.get("/health").json() == {"status": "ok", "version": "0.2.0"}
     response = client.get("/capabilities")
     assert response.status_code == 200
     assert "waiting_approval" in response.json()["workflow_statuses"]
