@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .agent import runtime
 from .config import get_settings
 from .database import AuditEvent, User, WorkflowRun, get_db
 from .domain import WorkflowAction, WorkflowStatus, transition
@@ -37,6 +38,15 @@ app.add_middleware(
 )
 
 Db = Annotated[Session, Depends(get_db)]
+
+
+class AgentRunRequest(BaseModel):
+    request: str
+    thread_id: str | None = None
+
+
+class AgentDecision(BaseModel):
+    approved: bool
 
 
 class TransitionPreview(BaseModel):
@@ -177,3 +187,27 @@ def transition_workflow(
     db.commit()
     db.refresh(workflow)
     return workflow
+
+
+@app.get("/tools")
+def list_tools(
+    principal: Annotated[Principal, Depends(require(Permission.RUN_WORKFLOW))],
+) -> list[dict]:
+    return runtime.registry.manifest()
+
+
+@app.post("/agent/runs")
+def start_agent_run(
+    request: AgentRunRequest,
+    principal: Annotated[Principal, Depends(require(Permission.RUN_WORKFLOW))],
+) -> dict:
+    return runtime.start(request.request, request.thread_id)
+
+
+@app.post("/agent/runs/{thread_id}/decision")
+def decide_agent_run(
+    thread_id: str,
+    request: AgentDecision,
+    principal: Annotated[Principal, Depends(require(Permission.APPROVE_WORKFLOW))],
+) -> dict:
+    return runtime.resume(thread_id, request.approved)
